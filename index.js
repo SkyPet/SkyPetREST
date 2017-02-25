@@ -8,15 +8,8 @@ const MongoClient = require('mongodb').MongoClient;
 const url = 'mongodb://localhost:27017/myproject';
 
 
-const addAttribute=eth.addAttribute;
-const getAttributes=eth.getAttributes;
-//const createAccount=eth.createAccount;
-//const checkPassword=eth.checkPassword;
-//const getContract=eth.getContract;
-//const setWeb3Provider=eth.setWeb3Provider;
-
 const collection='api_accounts'
-const getCost=eth.getCost;
+//const getCost=eth.getCost;
 //const getMoneyInAccount=eth.getMoneyInAccount;
 let webprovider;
 try{
@@ -29,13 +22,13 @@ const getAccountFromMongo=(api_key, cb)=>{
     // Use connect method to connect to the server
     MongoClient.connect(url, (err, db)=>{
         if(err){
-            return console.log(err);
+            return cb(err, null);
         }
         console.log("Connected successfully to server");
         const dbCol=db.collection(collection);
-        dbCol.find({_id:api_key}).toArray((err, result)=>{
+        dbCol.find({"_id":api_key}).toArray((err, result)=>{
             db.close();
-            cb(err, result);
+            return result.length===0?cb(new Error("No accounts!", null)):cb(null, result[0].account);
         });
     });
 }
@@ -48,8 +41,7 @@ const createAccount=(api_key, pswd, cb)=>{
             }
             console.log("Connected successfully to server");
             const dbCol=db.collection(collection);
-            console.log(result);
-            dbCol.insert({_id:api_key, account:result}, (err)=>{
+            dbCol.insert({"_id":api_key, "account":result}, (err)=>{
                 db.close();
                 cb(err, result);
             });
@@ -59,20 +51,23 @@ const createAccount=(api_key, pswd, cb)=>{
 
 eth.setWeb3Provider(webprovider.providerAddress, webprovider.providerPort);
 const contract=eth.getContract();
-if(process.env.DEVELOPMENT){
-    const myTempKey="10101";
+
+
+if(process.env.NODE_ENV==='development'){
+    const myTempKey=webprovider.testkey;
     MongoClient.connect(url, (err, db)=>{
         if(err){
             return console.log(err);
         }
         console.log("Connected successfully to server");
         const dbCol=db.collection(collection);
-        dbCol.drop();//restart
-        //console.log(result);
+        dbCol.drop();//reset to scratch
         eth.getAccounts((err, account)=>{
-            dbCol.insert({_id:myTempKey, account:account}, (err)=>{
+            dbCol.insert({"_id":myTempKey.toString(), "account":account}, (err, r)=>{
                 db.close();
-                cb(err, result);
+                if(err){
+                    console.log(err);
+                }
             });
         })
     });
@@ -80,49 +75,45 @@ if(process.env.DEVELOPMENT){
 
 
 
-const respond=(req, res, next)=>{
-  res.send('hello ' + req.params.name);
-  next();
-}
 let server = restify.createServer();
 server.use(restify.bodyParser({ mapParams: true }));
+server.use(restify.queryParser());
 //curl -X POST -H "Content-Type: application/json" -d '{"api_key":123, "pswd":"wassup"}' http://localhost:8080/account/create
 server.post('/account/create', (req, res, next)=>{
     createAccount(req.params.api_key, req.params.pswd, (err, success)=>{
         err?res.send("Account already exists!"):res.send(success);
     });
 });
-server.get('/account/:api_key', (req, res, next)=>{
-    getAccountFromMongo(req.params.api_key, (err, result)=>{
-        if(err){
-            return console.log(err);
-        }
-        result.length===0?res.send("No accounts!"):res.send(result[0]);
+server.get('/account', (req, res, next)=>{
+    getAccountFromMongo(req.query.api_key, (err, result)=>{
+        err?res.send(err):res.send(result);
     })
 });
 //server.head('/hello/:name', respond);
-server.get('/account/balance/:api_key', (req, res, next)=>{
+server.get('/account/balance', (req, res, next)=>{
     getAccountFromMongo(req.params.api_key, (err, result)=>{
-        if(err){
-            return console.log(err);
-        }
-        result.length===0?res.send("No accounts!"):eth.getMoneyInAccount(result[0], (err, res)=>{
+        err?res.send(err):eth.getMoneyInAccount(result, (err, balance)=>{
+            return res.send(balance);
+        });
+    })
+});
+server.post('/attributes/create', (req, res, next)=>{
+    console.log(req.params);
+    getAccountFromMongo(req.params.api_key.toString(), (err, result)=>{
+        err?res.send(err):eth.addAttribute(req.params.pswd, req.params.message, req.params.hashId, contract, (err, attributes)=>{
+            return res.send(attributes);
+        });
+    })
+})
+//addAttribute=(password, message, hashId, contract, cb)
+server.get('/attributes', (req, res, next)=>{
+    getAccountFromMongo(req.query.api_key, (err, result)=>{
+        err?res.send(err):eth.getAttributes(contract, req.query.hashId, (err, res)=>{
             return res.send(res);
         });
     })
 });
 
-server.get('/attributes/:api_key', (req, res, next)=>{
-    getAccountFromMongo(req.params.api_key, (err, result)=>{
-        if(err){
-            return console.log(err);
-        }
-        result.length===0?res.send("No accounts!"):eth.getAttributes(contract, req.params.hashId, (err, res)=>{
-            return res.send(res);
-        });
-    })
-});
-
-server.listen(8080, function() {
+server.listen(webprovider.port, function() {
   console.log('%s listening at %s', server.name, server.url);
 });
