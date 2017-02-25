@@ -1,0 +1,26 @@
+{
+  "name": "skypetrest",
+  "version": "0.0.0",
+  "description": "REST endpoints for skypet",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SkyPet/SkyPetREST.git"
+  },
+  "keywords": [
+    "SkyPet",
+    "Ethereum"
+  ],
+  "author": "Daniel Stahl",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SkyPet/SkyPetREST/issues"
+  },
+  "homepage": "https://github.com/SkyPet/SkyPetREST#readme",
+  "dependencies": {
+    "skypetwrapper": "^1.3.7"
+  }
+}
